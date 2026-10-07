@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>ScanKadosh - Etiquetas de Roupa</title>
+<style>
+  :root{--bg:#111827;--card:#1f2937;--line:#374151;--txt:#f9fafb;--mut:#9ca3af;--pri:#22c55e;--dng:#ef4444;--acc:#3b82f6}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:0 16px 96px}
+  header{padding:16px 0 8px;display:flex;justify-content:space-between;align-items:center}
+  h1{font-size:20px;margin:0}
+  .badge{background:var(--pri);color:#052e16;border-radius:999px;padding:2px 10px;font-weight:700}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+  .cam{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:3/4;max-height:60vh;width:100%}
+  video,canvas.prev{width:100%;height:100%;object-fit:cover;display:block}
+  .cam .hint{position:absolute;left:8px;right:8px;bottom:8px;background:#000a;border-radius:8px;padding:6px 10px;font-size:13px}
+  button,.btn{appearance:none;border:0;border-radius:12px;padding:14px 16px;font-size:16px;font-weight:600;color:#fff;background:var(--acc);width:100%;text-align:center;display:block;cursor:pointer}
+  button.pri{background:var(--pri);color:#052e16}
+  button.dng{background:var(--dng)}
+  button.sec{background:var(--line)}
+  button:disabled{opacity:.5}
+  .row{display:flex;gap:8px;margin-top:8px}
+  .row>*{flex:1}
+  label{display:block;font-size:12px;color:var(--mut);margin:10px 0 2px}
+  input,textarea,select{width:100%;background:#111827;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px}
+  textarea{min-height:80px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
+  .item{display:flex;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid var(--line);align-items:center}
+  .item:first-child{border-top:0}
+  .item small{color:var(--mut);display:block}
+  .item button{width:auto;padding:8px 12px;font-size:14px}
+  .bar{height:8px;background:var(--line);border-radius:8px;overflow:hidden;margin-top:8px}
+  .bar i{display:block;height:100%;width:0;background:var(--pri);transition:width .2s}
+  .stick{position:fixed;left:0;right:0;bottom:0;background:#111827ee;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+  .muted{color:var(--mut);font-size:13px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><h1>📷 ScanKadosh</h1><span class="badge" id="count">0</span></header>
+
+<section class="card" id="scanCard">
+  <div class="cam" id="camBox">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas class="prev" id="prev" hidden></canvas>
+    <div class="hint" id="hint">Aponte para o código de barras ou para o texto da etiqueta.</div>
+  </div>
+  <div class="row">
+    <button class="sec" id="btnCam">Ligar câmera</button>
+    <button class="pri" id="btnShot" disabled>Capturar etiqueta</button>
+  </div>
+  <div class="row">
+    <label class="btn sec" style="margin:0">Usar foto da galeria/câmera
+      <input type="file" id="file" accept="image/*" capture="environment" hidden>
+    </label>
+  </div>
+  <div class="bar" id="bar" hidden><i id="barI"></i></div>
+  <div class="muted" id="status"></div>
+</section>
+
+<section class="card" id="formCard" hidden>
+  <strong>Revisar dados</strong>
+  <div class="muted">O leitor preenche automático; corrija o que precisar antes de salvar.</div>
+  <div class="grid">
+    <div><label>Código de barras</label><input id="f_barcode" inputmode="numeric"></div>
+    <div><label>Referência / Modelo</label><input id="f_ref"></div>
+    <div><label>Marca</label><input id="f_marca"></div>
+    <div><label>Tamanho</label><input id="f_tam"></div>
+    <div><label>Cor</label><input id="f_cor"></div>
+    <div><label>Origem (Fabricado em)</label><input id="f_origem"></div>
+    <div><label>CNPJ</label><input id="f_cnpj"></div>
+    <div><label>RN / Registro</label><input id="f_rn"></div>
+    <div><label>Preço (R$)</label><input id="f_preco" inputmode="decimal"></div>
+    <div><label>Quantidade</label><input id="f_qtd" inputmode="numeric" value="1"></div>
+  </div>
+  <label>Composição</label><textarea id="f_comp"></textarea>
+  <label>Instruções de lavagem</label><textarea id="f_lav"></textarea>
+  <label>Texto bruto da etiqueta (OCR)</label><textarea id="f_raw"></textarea>
+  <div class="row">
+    <button class="sec" id="btnCancel">Descartar</button>
+    <button class="pri" id="btnSave">Salvar item</button>
+  </div>
+</section>
+
+<section class="card">
+  <strong>Itens escaneados</strong>
+  <div id="list"><div class="muted">Nenhum item ainda.</div></div>
+  <button class="dng" id="btnClear" style="margin-top:12px" hidden>Limpar tudo</button>
+</section>
+
+<div class="stick"><button class="pri" id="btnXlsx" disabled>Finalizar e baixar Excel</button></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const KEY = 'scankadosh.items.v1';
+const FIELDS = [
+  ['barcode','Código de barras'],['ref','Referência'],['marca','Marca'],['tam','Tamanho'],['cor','Cor'],
+  ['origem','Origem'],['cnpj','CNPJ'],['rn','RN'],['preco','Preço (R$)'],['qtd','Quantidade'],
+  ['comp','Composição'],['lav','Lavagem'],['raw','Texto bruto'],['data','Data/Hora']
+];
+let items = [];
+try { items = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) {}
+let stream = null, liveBarcode = '', loop = null, busy = false;
+
+const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch(e) {} };
+const setStatus = (t) => $('status').textContent = t || '';
+
+function renderList(){
+  $('count').textContent = items.length;
+  $('btnXlsx').disabled = !items.length;
+  $('btnClear').hidden = !items.length;
+  const box = $('list');
+  if(!items.length){ box.innerHTML = '<div class="muted">Nenhum item ainda.</div>'; return; }
+  box.innerHTML = '';
+  items.forEach((it, i) => {
+    const d = document.createElement('div'); d.className = 'item';
+    const t = document.createElement('div');
+    const b = document.createElement('b'); b.textContent = `${i+1}. ${it.marca || it.ref || it.barcode || 'Item'}`;
+    const s = document.createElement('small');
+    s.textContent = [it.tam && 'Tam ' + it.tam, it.cor, it.barcode, it.qtd && 'x' + it.qtd].filter(Boolean).join(' · ');
+    t.append(b, s);
+    const x = document.createElement('button'); x.className = 'dng'; x.textContent = 'Excluir';
+    x.onclick = () => { items.splice(i,1); persist(); renderList(); };
+    d.append(t, x); box.append(d);
+  });
+}
+
+/* ---------- Câmera ---------- */
+async function startCam(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    setStatus('Câmera ao vivo indisponível (precisa de HTTPS). Use "Usar foto da galeria/câmera".'); return;
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    $('video').srcObject = stream; $('video').hidden = false; $('prev').hidden = true;
+    $('btnShot').disabled = false; $('btnCam').textContent = 'Desligar câmera';
+    setStatus(''); startBarcodeLoop();
+  }catch(e){ setStatus('Não foi possível abrir a câmera: ' + e.message + '. Use a opção de foto.'); }
+}
+function stopCam(){
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  clearInterval(loop); loop = null;
+  $('btnShot').disabled = true; $('btnCam').textContent = 'Ligar câmera';
+}
+$('btnCam').onclick = () => stream ? stopCam() : startCam();
+
+/* ---------- Código de barras ---------- */
+let detector = null, zxing = null;
+function initDetectors(){
+  if('BarcodeDetector' in window){
+    try{ detector = new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code']}); }catch(e){}
+  }
+  if(!detector && window.ZXing){ zxing = new ZXing.MultiFormatReader(); }
+}
+async function decodeBarcode(source){
+  if(detector){
+    try{ const r = await detector.detect(source); if(r.length) return r[0].rawValue; }catch(e){}
+    return '';
+  }
+  if(zxing){
+    try{
+      const c = document.createElement('canvas');
+      const w = source.videoWidth || source.naturalWidth || source.width, h = source.videoHeight || source.naturalHeight || source.height;
+      c.width = w; c.height = h; c.getContext('2d').drawImage(source,0,0,w,h);
+      const lum = new ZXing.HTMLCanvasElementLuminanceSource(c);
+      const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+      const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      return zxing.decode(bmp, hints).getText();
+    }catch(e){}
+  }
+  return '';
+}
+function startBarcodeLoop(){
+  clearInterval(loop);
+  loop = setInterval(async () => {
+    if(busy || !stream || $('video').readyState < 2) return;
+    const code = await decodeBarcode($('video'));
+    if(code && code !== liveBarcode){
+      liveBarcode = code; $('hint').textContent = '✔ Código lido: ' + code + ' — agora capture a etiqueta.';
+      if(navigator.vibrate) navigator.vibrate(60);
+    }
+  }, 600);
+}
+
+/* ---------- OCR ---------- */
+async function ocr(canvas){
+  $('bar').hidden = false; $('barI').style.width = '0';
+  const r = await Tesseract.recognize(canvas, 'por+eng', {
+    logger: m => { if(m.status === 'recognizing text') $('barI').style.width = Math.round(m.progress*100) + '%'; else setStatus('Preparando leitor de texto…'); }
+  });
+  $('bar').hidden = true;
+  return r.data.text || '';
+}
+
+function prepCanvas(source){
+  const sw = source.videoWidth || source.naturalWidth || source.width, sh = source.videoHeight || source.naturalHeight || source.height;
+  const k = Math.min(1, 1800 / Math.max(sw, sh));
+  const c = document.createElement('canvas'); c.width = Math.round(sw*k); c.height = Math.round(sh*k);
+  const g = c.getContext('2d'); g.drawImage(source,0,0,c.width,c.height);
+  // realce simples: tons de cinza + contraste
+  const d = g.getImageData(0,0,c.width,c.height), p = d.data;
+  for(let i=0;i<p.length;i+=4){
+    let y = 0.299*p[i]+0.587*p[i+1]+0.114*p[i+2];
+    y = Math.max(0, Math.min(255, (y-128)*1.35+128));
+    p[i]=p[i+1]=p[i+2]=y;
+  }
+  g.putImageData(d,0,0); return c;
+}
+
+/* ---------- Parser da etiqueta ---------- */
+const COLORS = ['branco','preto','azul','vermelho','verde','amarelo','rosa','cinza','marrom','bege','laranja','roxo','vinho','off white','nude','marinho','caqui','jeans','white','black','blue','red','green','grey','gray'];
+const MATERIALS = 'algod[aã]o|poli[eé]ster|poliamida|elastano|viscose|linho|l[aã]|seda|nylon|nailon|acr[ií]lico|modal|lycra|spandex|cotton|polyester|elastane|viscosa|malha|couro';
+function parseLabel(text, barcode){
+  const raw = text.replace(/\r/g,'');
+  const flat = raw.replace(/\s+/g,' ');
+  const out = {barcode: barcode||'', ref:'', marca:'', tam:'', cor:'', origem:'', cnpj:'', rn:'', preco:'', qtd:'1', comp:'', lav:'', raw: raw.trim()};
+
+  if(!out.barcode){ const m = flat.match(/\b\d{13}\b|\b\d{12}\b|\b\d{8}\b/); if(m) out.barcode = m[0]; }
+
+  const cnpj = flat.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/); if(cnpj) out.cnpj = cnpj[0];
+  const rn = flat.match(/\bRN\s*[:.\-]?\s*(\d{3,7})/i); if(rn) out.rn = rn[1];
+
+  const comp = [...flat.matchAll(new RegExp('(\\d{1,3}\\s?%\\s*(?:' + MATERIALS + '))','gi'))].map(m => m[1].trim());
+  if(comp.length) out.comp = comp.join(', ');
+
+  const orig = flat.match(/(?:fabricado|feito|made|produzido)\s*(?:no|em|in)?\s*[:\-]?\s*([A-Za-zÀ-ú]{3,20})/i);
+  if(orig) out.origem = orig[1];
+  else { const o = flat.match(/ind[uú]stria\s+(brasileira|chinesa)/i); if(o) out.origem = o[1]; }
+
+  const tam = flat.match(/(?:tam(?:anho)?|size|tamanho)\s*[:.\-]?\s*(XXG|XG|GG|PP|P|M|G|XXL|XL|XS|S|L|\d{1,2})\b/i)
+           || flat.match(/\b(XXG|XG|GG|PP|XXL|XL|XS)\b/);
+  if(tam) out.tam = tam[1].toUpperCase();
+
+  const low = flat.toLowerCase();
+  const cor = COLORS.find(c => new RegExp('\\b' + c + '\\b').test(low)); if(cor) out.cor = cor;
+  const ccor = flat.match(/(?:cor|color)\s*[:.\-]\s*([A-Za-zÀ-ú ]{3,20})/i); if(ccor) out.cor = ccor[1].trim();
+
+  const ref = flat.match(/(?:ref(?:er[eê]ncia)?|modelo|cod(?:igo)?|art(?:igo)?|sku)\.?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,})/i);
+  if(ref) out.ref = ref[1];
+
+  const preco = flat.match(/R\$\s*(\d{1,4}[.,]\d{2})/i); if(preco) out.preco = preco[1].replace('.',',');
+
+  const lav = raw.split('\n').filter(l => /lav|alvej|passar|secar|n[aã]o\s|wash|iron|bleach|dry|temperatura|m[aá]quina/i.test(l)).map(l => l.trim()).filter(Boolean);
+  if(lav.length) out.lav = lav.join('; ');
+
+  // marca: primeira linha curta, em maiúsculas, sem dígitos/símbolos de composição
+  const cand = raw.split('\n').map(l => l.trim()).find(l => l.length >= 3 && l.length <= 24 && !/\d|%|:/.test(l) && /^[A-ZÀ-Ú][A-ZÀ-Ú &.\-]+$/.test(l));
+  if(cand) out.marca = cand;
+  return out;
+}
+
+/* ---------- Fluxo de captura ---------- */
+function fillForm(o){
+  $('f_barcode').value = o.barcode; $('f_ref').value = o.ref; $('f_marca').value = o.marca; $('f_tam').value = o.tam;
+  $('f_cor').value = o.cor; $('f_origem').value = o.origem; $('f_cnpj').value = o.cnpj; $('f_rn').value = o.rn;
+  $('f_preco').value = o.preco; $('f_qtd').value = o.qtd || '1'; $('f_comp').value = o.comp; $('f_lav').value = o.lav; $('f_raw').value = o.raw;
+  $('formCard').hidden = false; $('formCard').scrollIntoView({behavior:'smooth'});
+}
+async function processSource(source){
+  if(busy) return; busy = true; $('btnShot').disabled = true;
+  try{
+    const canvas = prepCanvas(source);
+    const preview = $('prev'); preview.width = canvas.width; preview.height = canvas.height;
+    preview.getContext('2d').drawImage(canvas,0,0); preview.hidden = false; $('video').hidden = true;
+    setStatus('Lendo etiqueta…');
+    let code = liveBarcode || await decodeBarcode(canvas);
+    const text = await ocr(canvas);
+    fillForm(parseLabel(text, code));
+    setStatus('Leitura concluída. Confira os campos.');
+  }catch(e){
+    setStatus('Falha na leitura: ' + e.message + '. Você pode preencher manualmente.');
+    fillForm(parseLabel('', liveBarcode));
+  }finally{
+    busy = false; liveBarcode = ''; $('hint').textContent = 'Aponte para o código de barras ou para o texto da etiqueta.';
+    $('btnShot').disabled = !stream;
+  }
+}
+$('btnShot').onclick = () => processSource($('video'));
+$('file').onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const img = new Image(); img.onload = () => { processSource(img); URL.revokeObjectURL(img.src); };
+  img.src = URL.createObjectURL(f); e.target.value = '';
+};
+
+function closeForm(){
+  $('formCard').hidden = true; $('prev').hidden = true;
+  if(stream) $('video').hidden = false;
+  setStatus('');
+}
+$('btnCancel').onclick = closeForm;
+$('btnSave').onclick = () => {
+  const it = {
+    barcode:$('f_barcode').value.trim(), ref:$('f_ref').value.trim(), marca:$('f_marca').value.trim(), tam:$('f_tam').value.trim(),
+    cor:$('f_cor').value.trim(), origem:$('f_origem').value.trim(), cnpj:$('f_cnpj').value.trim(), rn:$('f_rn').value.trim(),
+    preco:$('f_preco').value.trim(), qtd:$('f_qtd').value.trim() || '1', comp:$('f_comp').value.trim(), lav:$('f_lav').value.trim(),
+    raw:$('f_raw').value.trim(), data:new Date().toLocaleString('pt-BR')
+  };
+  items.push(it); persist(); renderList(); closeForm();
+  window.scrollTo({top:0,behavior:'smooth'});
+};
+$('btnClear').onclick = () => { if(confirm('Apagar todos os itens escaneados?')){ items = []; persist(); renderList(); } };
+
+/* ---------- Excel ---------- */
+$('btnXlsx').onclick = () => {
+  if(!window.XLSX){ alert('Biblioteca do Excel não carregou. Verifique a internet e recarregue.'); return; }
+  const rows = items.map((it,i) => {
+    const r = {'#': i+1};
+    FIELDS.forEach(([k,label]) => {
+      let v = it[k] ?? '';
+      if(k === 'qtd' && v !== '' && !isNaN(+v)) v = +v;
+      r[label] = v;
+    });
+    return r;
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = ['#',...FIELDS.map(f => f[1])].map(h => ({wch: /bruto|Composi|Lavagem/.test(h) ? 40 : h === '#' ? 4 : 18}));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Etiquetas');
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  XLSX.writeFile(wb, `etiquetas_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.xlsx`);
+};
+
+initDetectors(); renderList();
+</script>
+</body>
+</html>
